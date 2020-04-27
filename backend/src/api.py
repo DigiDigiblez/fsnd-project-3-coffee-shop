@@ -28,6 +28,12 @@ db_drop_and_create_all()
         or appropriate status code indicating reason for failure
 '''
 
+
+@app.route('/', methods=['GET'])
+def get_drinks():
+    return "drinks on us!"
+
+
 '''
 @TODO implement endpoint
     GET /drinks-detail
