@@ -8,33 +8,65 @@ AUTH0_DOMAIN = 'fsnd2020.auth0.com'
 ALGORITHMS = ['RS256']
 API_AUDIENCE = 'cafe'
 
-## AuthError Exception
-'''
-AuthError Exception
-A standardized way to communicate auth failure modes
-'''
+CODE = {
+    # Success codes
+    "200_OK": 200,
+
+    # Client error codes
+    "401_UNAUTHORIZED": 401,
+    "403_FORBIDDEN": 403,
+
+    # Server error codes
+    "500_INTERNAL_SERVER_ERROR": 500
+}
+
+ERR = {
+    CODE["401_UNAUTHORIZED"]: {
+        "Type": "AuthError",
+        "Title": "invalid_header",
+        "Code": CODE["401_UNAUTHORIZED"],
+    }
+}
 
 
+# AuthError Exception: A standardised way to communicate auth failure modes
 class AuthError(Exception):
     def __init__(self, error, status_code):
         self.error = error
         self.status_code = status_code
 
 
-## Auth Header
-
-'''
-@TODO implement get_token_auth_header() method
-    it should attempt to get the header from the request
-        it should raise an AuthError if no header is present
-    it should attempt to split bearer and the token
-        it should raise an AuthError if the header is malformed
-    return the token part of the header
-'''
+# Handles the raising of errors
+def raise_error(err, err_desc: str):
+    if err["Type"] == "AuthError":
+        raise AuthError({
+            "code": err["Title"],
+            "description": err_desc
+        }, err["Code"])
 
 
+# Retrieve token from auth header
 def get_token_auth_header():
-    raise Exception('Not Implemented')
+    if "Authorization" not in request.headers:
+        # Raise a 401 error
+        raise_error(ERR[CODE["401_UNAUTHORIZED"]], "Authorization header is missing")
+
+    # Dissect header
+    header_parts = request.headers['Authorization'].split()
+    bearer_prefix = header_parts[0]
+    auth_token = header_parts[1]
+
+    # 401 err handling
+    if not bearer_prefix:
+        raise_error(ERR[CODE["401_UNAUTHORIZED"]], "Authorization header is missing bearer prefix")
+
+    elif bearer_prefix and len(header_parts) == 1:
+        raise_error(ERR[CODE["401_UNAUTHORIZED"]], "Authorization header is missing auth token")
+
+    elif len(header_parts) > 2:
+        raise_error(ERR[CODE["401_UNAUTHORIZED"]], "Authorization header is malformed")
+
+    return auth_token
 
 
 '''

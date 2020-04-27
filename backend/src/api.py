@@ -1,37 +1,66 @@
 import os
+import sys
+
 from flask import Flask, request, jsonify, abort
 from sqlalchemy import exc
 import json
 from flask_cors import CORS
 
 from .database.models import db_drop_and_create_all, setup_db, Drink
-from .auth.auth import AuthError, requires_auth
+from .auth.auth import AuthError, requires_auth, raise_error, ERR, CODE
 
 app = Flask(__name__)
 setup_db(app)
 CORS(app)
 
-'''
-@TODO uncomment the following line to initialize the datbase
-!! NOTE THIS WILL DROP ALL RECORDS AND START YOUR DB FROM SCRATCH
-!! NOTE THIS MUST BE UNCOMMENTED ON FIRST RUN
-'''
 db_drop_and_create_all()
 
-## ROUTES
-'''
-@TODO implement endpoint
-    GET /drinks
-        it should be a public endpoint
-        it should contain only the drink.short() data representation
-    returns status code 200 and json {"success": True, "drinks": drinks} where drinks is the list of drinks
-        or appropriate status code indicating reason for failure
-'''
 
-
+# Get all drinks
 @app.route('/', methods=['GET'])
+def index():
+    return "Open for business!"
+
+
+# Get basic drink details
+@app.route('/drinks', methods=['GET'])
 def get_drinks():
-    return "drinks on us!"
+    try:
+        drinks = Drink.query.all()
+        short_drinks = [drink.short() for drink in drinks]
+
+        response = {
+            "Success": True,
+            "drinks": short_drinks
+        }
+
+        return jsonify(response), CODE["200_OK"]
+
+    except Exception as e:
+        print(sys.exc_info())
+        raise_error(ERR[CODE["500_INTERNAL_SERVER_ERROR"]], e)
+
+
+# Get full drink details
+@app.route('/drinks-details', methods=["GET"])
+def get_drinks_detail():
+    try:
+        if 'get:drinks-detail' not in request.permissions:
+            raise_error(ERR[CODE["401_UNAUTHORIZED"]], "Permission to get drinks details is not authorised")
+
+        drinks = Drink.query.all()
+        long_drinks = [drink.long() for drink in drinks]
+
+        response = {
+            "Success": True,
+            "drinks": long_drinks
+        }
+
+        return jsonify(response), CODE["200_OK"]
+
+    except Exception as e:
+        print(sys.exc_info())
+        raise_error(ERR[CODE["500_INTERNAL_SERVER_ERROR"]], e)
 
 
 '''
