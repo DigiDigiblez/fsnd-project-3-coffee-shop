@@ -2,7 +2,7 @@ import json
 from functools import wraps
 from urllib.request import urlopen
 
-from flask import request, app
+from flask import request, abort
 from jose import jwt
 
 AUTH0_DOMAIN = "fsnd2020.auth0.com"
@@ -29,7 +29,6 @@ AUTH_HEADER_ERR = {
     "INVALID_HEADER": "invalid_header",
     "INVALID_CLAIMS": "invalid_claims",
     "TOKEN_EXPIRED": "token_expired",
-    "UNAUTHORIZED": "unauthorized"
 }
 
 
@@ -78,17 +77,11 @@ def get_token_auth_header():
 def check_permissions(permission: str, payload):
     # Check if user has any permissions
     if "permissions" not in payload:
-        raise AuthError({
-            "code": AUTH_HEADER_ERR["INVALID_CLAIMS"],
-            "description": "User has no permissions"
-        }, RESPONSE_CODE["401_UNAUTHORIZED"])
+        abort(RESPONSE_CODE["400_BAD_REQUEST"])
 
     # Check if user has the requested permission
     elif permission not in payload["permissions"]:
-        raise AuthError({
-            "code": AUTH_HEADER_ERR["UNAUTHORIZED"],
-            "description": "User doesn't have the requested permission"
-        }, RESPONSE_CODE["401_UNAUTHORIZED"])
+        abort(RESPONSE_CODE["403_FORBIDDEN"])
 
     return True
 
@@ -159,7 +152,13 @@ def requires_auth(permission=""):
             jwt = get_token_auth_header()
 
             # Grab the payload from decoded jwt
-            payload = verify_decode_jwt(jwt)
+            try:
+                payload = verify_decode_jwt(jwt)
+            except:
+                raise AuthError({
+                    "code": AUTH_HEADER_ERR["INVALID_HEADER"],
+                    "description": "Token unauthorised"
+                }, RESPONSE_CODE["401_UNAUTHORIZED"])
 
             # Check if user has any / requested permission(s)
             check_permissions(permission, payload)
@@ -169,10 +168,3 @@ def requires_auth(permission=""):
         return wrapper
 
     return requires_auth_decorator
-
-
-@app.route("/headers")
-@requires_auth
-def headers(payload):
-    print(payload)
-    return "Access Granted!"

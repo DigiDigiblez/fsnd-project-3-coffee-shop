@@ -4,7 +4,7 @@ import sys
 from flask import Flask, request, jsonify, abort
 from flask_cors import CORS
 
-from .auth.auth import AuthError, RESPONSE_CODE
+from .auth.auth import AuthError, RESPONSE_CODE, requires_auth
 from .database.models import db_drop_and_create_all, setup_db, Drink
 
 app = Flask(__name__)
@@ -12,11 +12,6 @@ setup_db(app)
 CORS(app)
 
 db_drop_and_create_all()
-
-
-# Handles the aborting of errors
-def abort_with_error(err_code):
-    abort(err_code)
 
 
 # Get all drinks
@@ -41,13 +36,13 @@ def get_drinks():
 
     except:
         print(sys.exc_info())
-        abort_with_error(RESPONSE_CODE["500_INTERNAL_SERVER_ERROR"])
+        abort(RESPONSE_CODE["500_INTERNAL_SERVER_ERROR"])
 
 
 # Get full drink details
 @app.route("/drinks-detail", methods=["GET"])
-# @requires_auth("get:drinks-detail")
-def get_drinks_detail():
+@requires_auth("get:drinks-detail")
+def get_drinks_detail(jwt):
     try:
         drinks = Drink.query.all()
         long_drinks = [drink.long() for drink in drinks]
@@ -61,17 +56,17 @@ def get_drinks_detail():
 
     except:
         print(sys.exc_info())
-        abort_with_error(RESPONSE_CODE["500_INTERNAL_SERVER_ERROR"])
+        abort(RESPONSE_CODE["500_INTERNAL_SERVER_ERROR"])
 
 
 # POST a new drink
 @app.route("/drinks", methods=["POST"])
-# TODO - should require the "post:drinks" permission
-def post_drink():
+@requires_auth("post:drinks")
+def post_drink(jwt):
     body = request.get_json()
 
     if "title" not in body or "recipe" not in body:
-        abort_with_error(RESPONSE_CODE["422_UNPROCESSABLE_ENTITY"])
+        abort(RESPONSE_CODE["422_UNPROCESSABLE_ENTITY"])
 
     drink_title = body.get("title", None)
     drink_recipe = body.get("recipe", None)
@@ -94,19 +89,19 @@ def post_drink():
 
 
 # Update a drink
-# TODO - should require the "patch:drinks" permission
 @app.route("/drinks/<int:drink_id>", methods=["PATCH"])
-def patch_drink(drink_id):
+@requires_auth("patch:drinks")
+def patch_drink(jwt, drink_id):
     try:
         # Error handling for id
         drink_count = len(Drink.query.all())
         if drink_id is None or drink_id <= 0 or drink_id > drink_count:
-            abort_with_error(RESPONSE_CODE["404_RESOURCE_NOT_FOUND"])
+            abort(RESPONSE_CODE["404_RESOURCE_NOT_FOUND"])
 
         # Error handling for existing drink
         existing_drink = Drink.query.filter(Drink.id == drink_id).one_or_none()
         if existing_drink is None:
-            abort_with_error(RESPONSE_CODE["404_RESOURCE_NOT_FOUND"])
+            abort(RESPONSE_CODE["404_RESOURCE_NOT_FOUND"])
 
         # Retrieving values for updating
         body = request.get_json()
@@ -138,22 +133,22 @@ def patch_drink(drink_id):
 
     except:
         print(sys.exc_info())
-        abort_with_error(RESPONSE_CODE["500_INTERNAL_SERVER_ERROR"])
+        abort(RESPONSE_CODE["500_INTERNAL_SERVER_ERROR"])
 
 
 # Delete a drink
-# TODO - should require the "delete:drinks" permission
 @app.route("/drinks/<int:drink_id>", methods=["DELETE"])
-def delete_drink(drink_id):
+@requires_auth("delete:drinks")
+def delete_drink(jwt, drink_id):
     drink_count = len(Drink.query.all())
 
     if drink_id is None or drink_id <= 0 or drink_id > drink_count:
-        abort_with_error(RESPONSE_CODE["404_RESOURCE_NOT_FOUND"])
+        abort(RESPONSE_CODE["404_RESOURCE_NOT_FOUND"])
 
     target_drink = Drink.query.filter(Drink.id == drink_id).one_or_none()
 
     if target_drink is None:
-        abort_with_error(RESPONSE_CODE["404_RESOURCE_NOT_FOUND"])
+        abort(RESPONSE_CODE["404_RESOURCE_NOT_FOUND"])
 
     target_drink.delete()
 
