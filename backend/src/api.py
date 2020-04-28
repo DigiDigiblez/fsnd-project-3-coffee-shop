@@ -4,14 +4,14 @@ import sys
 from flask import Flask, request, jsonify, abort
 from flask_cors import CORS
 
-from .auth.auth import AuthError, RESPONSE_CODE, requires_auth
+from .auth.auth import AuthError, RESPONSE_CODE, requires_auth, AUTH_HEADER_ERR
 from .database.models import db_drop_and_create_all, setup_db, Drink
 
 app = Flask(__name__)
 setup_db(app)
 CORS(app)
 
-db_drop_and_create_all()
+# db_drop_and_create_all()
 
 
 # Get all drinks
@@ -133,31 +133,41 @@ def patch_drink(jwt, drink_id):
 
     except:
         print(sys.exc_info())
-        abort(RESPONSE_CODE["500_INTERNAL_SERVER_ERROR"])
+        raise AuthError({
+            "code": AUTH_HEADER_ERR["INVALID_HEADER"],
+            "description": "Unauthorised"
+        }, RESPONSE_CODE["401_UNAUTHORIZED"])
 
 
 # Delete a drink
 @app.route("/drinks/<int:drink_id>", methods=["DELETE"])
 @requires_auth("delete:drinks")
 def delete_drink(jwt, drink_id):
-    drink_count = len(Drink.query.all())
+    try:
+        drink_count = len(Drink.query.all())
 
-    if drink_id is None or drink_id <= 0 or drink_id > drink_count:
-        abort(RESPONSE_CODE["404_RESOURCE_NOT_FOUND"])
+        if drink_id is None or drink_id <= 0 or drink_id > drink_count:
+            abort(RESPONSE_CODE["404_RESOURCE_NOT_FOUND"])
 
-    target_drink = Drink.query.filter(Drink.id == drink_id).one_or_none()
+        target_drink = Drink.query.filter(Drink.id == drink_id).one_or_none()
 
-    if target_drink is None:
-        abort(RESPONSE_CODE["404_RESOURCE_NOT_FOUND"])
+        if target_drink is None:
+            abort(RESPONSE_CODE["404_RESOURCE_NOT_FOUND"])
 
-    target_drink.delete()
+        target_drink.delete()
 
-    response = {
-        "success": True,
-        "delete": drink_id,
-    }
+        response = {
+            "success": True,
+            "delete": drink_id,
+        }
 
-    return jsonify(response), RESPONSE_CODE["200_OK"]
+        return jsonify(response), RESPONSE_CODE["200_OK"]
+    except:
+        print(sys.exc_info())
+        raise AuthError({
+            "code": AUTH_HEADER_ERR["INVALID_HEADER"],
+            "description": "Unauthorised"
+        }, RESPONSE_CODE["401_UNAUTHORIZED"])
 
 
 # Error Handling
@@ -181,17 +191,6 @@ def resource_not_found(error):
         "error": RESPONSE_CODE["404_RESOURCE_NOT_FOUND"],
         "message": "Resource not found",
     }), RESPONSE_CODE["404_RESOURCE_NOT_FOUND"]
-
-
-@app.errorhandler(RESPONSE_CODE["405_METHOD_NOT_ALLOWED"])
-def resource_not_found(error):
-    print(error)
-
-    return jsonify({
-        "success": False,
-        "error": RESPONSE_CODE["405_METHOD_NOT_ALLOWED"],
-        "message": "Method not allowed",
-    }), RESPONSE_CODE["405_METHOD_NOT_ALLOWED"]
 
 
 @app.errorhandler(RESPONSE_CODE["422_UNPROCESSABLE_ENTITY"])
