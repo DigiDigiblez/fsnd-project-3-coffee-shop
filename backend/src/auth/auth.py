@@ -80,7 +80,7 @@ def check_permissions(permission: str, payload):
 
     # Check if user has the requested permission
     elif permission not in payload["permissions"]:
-        abort(RESPONSE_CODE["403_FORBIDDEN"])
+        abort(RESPONSE_CODE["401_UNAUTHORIZED"])
 
     return True
 

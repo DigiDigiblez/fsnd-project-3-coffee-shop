@@ -82,7 +82,7 @@ def post_drink(jwt):
 
     response = {
         "success": True,
-        "drinks": [new_drink.short()],
+        "drinks": [new_drink.long()],
     }
 
     return jsonify(response), RESPONSE_CODE["200_OK"]
