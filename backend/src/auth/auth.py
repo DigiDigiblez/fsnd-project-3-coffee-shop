@@ -1,8 +1,6 @@
-import json
-from flask import request, _request_ctx_stack, abort
 from functools import wraps
-from jose import jwt
-from urllib.request import urlopen
+
+from flask import request
 
 AUTH0_DOMAIN = 'fsnd2020.auth0.com'
 ALGORITHMS = ['RS256']
@@ -52,11 +50,6 @@ def raise_error(err, err_desc: str):
             "code": err["Title"],
             "description": err_desc
         }, err["Code"])
-
-
-# Handles the aborting of errors
-def abort_error(err_code):
-    abort(err_code)
 
 
 # Retrieve token from auth header

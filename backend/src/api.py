@@ -1,19 +1,22 @@
-import os
+import json
 import sys
 
 from flask import Flask, request, jsonify, abort
-from sqlalchemy import exc
-import json
 from flask_cors import CORS
 
+from .auth.auth import AuthError, CODE, abort_with_error
 from .database.models import db_drop_and_create_all, setup_db, Drink
-from .auth.auth import AuthError, requires_auth, raise_error, ERR, CODE, abort_error
 
 app = Flask(__name__)
 setup_db(app)
 CORS(app)
 
 db_drop_and_create_all()
+
+
+# Handles the aborting of errors
+def abort_with_error(err_code):
+    abort(err_code)
 
 
 # Get all drinks
@@ -38,7 +41,7 @@ def get_drinks():
 
     except:
         print(sys.exc_info())
-        abort_error(CODE["500_INTERNAL_SERVER_ERROR"])
+        abort_with_error(CODE["500_INTERNAL_SERVER_ERROR"])
 
 
 # Get full drink details
@@ -58,71 +61,125 @@ def get_drinks_detail():
 
     except:
         print(sys.exc_info())
-        abort_error(CODE["500_INTERNAL_SERVER_ERROR"])
+        abort_with_error(CODE["500_INTERNAL_SERVER_ERROR"])
 
 
 # POST a new drink
 @app.route("/drinks", methods=["POST"])
+# TODO - should require the 'post:drinks' permission
 def post_drink():
+    body = request.get_json()
+
+    if "title" not in body or "recipe" not in body:
+        abort_with_error(CODE["422_UNPROCESSABLE_ENTITY"])
+
+    drink_title = body.get("title", None)
+    drink_recipe = body.get("recipe", None)
+
+    # Instantiate new drink
+    new_drink = Drink(
+        title=drink_title,
+        recipe=json.dumps(drink_recipe)
+    )
+
+    # Add new drink to db
+    new_drink.insert()
+
+    response = {
+        "success": True,
+        "drinks": [new_drink.short()],
+    }
+
+    return jsonify(response), CODE["200_OK"]
+
+
+'''
+@TODO implement endpoint
+    PATCH /drinks/<id>
+        it should update the corresponding row for <id>
+        it should contain the drink.long() data representation
+    returns status code 200 and json {"success": True, "drinks": drink} where drink an array containing only the updated drink
+        or appropriate status code indicating reason for failure
+'''
+
+
+# Update a drink
+# TODO - should require the 'patch:drinks' permission
+@app.route("/drinks/<int:drink_id>", methods=["PATCH"])
+def patch_drink(drink_id):
     try:
+        # Error handling for id
+        drink_count = len(Drink.query.all())
+        if drink_id is None or drink_id <= 0 or drink_id > drink_count:
+            abort_with_error(CODE["404_RESOURCE_NOT_FOUND"])
+
+        # Error handling for existing drink
+        existing_drink = Drink.query.filter(Drink.id == drink_id).one_or_none()
+        if existing_drink is None:
+            abort_with_error(CODE["404_RESOURCE_NOT_FOUND"])
+
+        # Retrieving values for updating
         body = request.get_json()
 
-        if "title" not in body or "recipe" not in body:
-            abort_error(CODE["422_UNPROCESSABLE_ENTITY"])
+        # Check if body contains any data
+        if body is not False:
+            drink_new_title = ""
+            drink_new_recipe = ""
 
-        drink_title = body.get("title", None)
-        drink_recipe = body.get("recipe", None)
+            # Retrieve and update the existing record with new data if provided
+            if "title" in body:
+                drink_new_title = body.get("title")
+                existing_drink.title = drink_new_title
+            if "recipe" in body:
+                drink_new_recipe = body.get("recipe")
+                existing_drink.recipe = json.dumps(drink_new_recipe)
 
-        # Instantiate new drink
-        new_drink = Drink(
-            title=drink_title,
-            recipe=json.dumps(drink_recipe)
-        )
-
-        # Add new drink to db
-        new_drink.insert()
+            # Update record only if it's data has changed
+            if existing_drink.title == drink_new_title or \
+                    existing_drink.recipe == json.dumps(drink_new_recipe):
+                existing_drink.update()
 
         response = {
             "success": True,
-            "message": "Drink successfully created.",
+            "drinks": [existing_drink.long()],
         }
 
         return jsonify(response), CODE["200_OK"]
 
     except:
         print(sys.exc_info())
-        abort_error(CODE["500_INTERNAL_SERVER_ERROR"])
+        abort_with_error(CODE["500_INTERNAL_SERVER_ERROR"])
+
+
+# Delete a drink
+# TODO - should require the 'delete:drinks' permission
+@app.route("/drinks/<int:drink_id>", methods=["DELETE"])
+def delete_drink(drink_id):
+    drink_count = len(Drink.query.all())
+
+    if drink_id is None or drink_id <= 0 or drink_id > drink_count:
+        abort_with_error(CODE["404_RESOURCE_NOT_FOUND"])
+
+    target_drink = Drink.query.filter(Drink.id == drink_id).one_or_none()
+
+    if target_drink is None:
+        abort_with_error(CODE["404_RESOURCE_NOT_FOUND"])
+
+    target_drink.delete()
+
+    response = {
+        "success": True,
+        "delete": drink_id,
+    }
+
+    return jsonify(response), CODE["200_OK"]
 
 
 '''
 @TODO implement endpoint
-    POST /drinks
-        it should create a new row in the drinks table
-        it should require the 'post:drinks' permission
-        it should contain the drink.long() data representation
-    returns status code 200 and json {"success": True, "drinks": drink} where drink an array containing only the newly created drink
-        or appropriate status code indicating reason for failure
-'''
-
-'''
-@TODO implement endpoint
-    PATCH /drinks/<id>
-        where <id> is the existing model id
-        it should respond with a 404 error if <id> is not found
-        it should update the corresponding row for <id>
-        it should require the 'patch:drinks' permission
-        it should contain the drink.long() data representation
-    returns status code 200 and json {"success": True, "drinks": drink} where drink an array containing only the updated drink
-        or appropriate status code indicating reason for failure
-'''
-
-'''
-@TODO implement endpoint
-    DELETE /drinks/<id>
-        where <id> is the existing model id
         it should respond with a 404 error if <id> is not found
         it should delete the corresponding row for <id>
-        it should require the 'delete:drinks' permission
+        it 
     returns status code 200 and json {"success": True, "delete": id} where id is the id of the deleted record
         or appropriate status code indicating reason for failure
 '''
