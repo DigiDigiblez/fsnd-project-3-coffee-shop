@@ -7,7 +7,7 @@ import json
 from flask_cors import CORS
 
 from .database.models import db_drop_and_create_all, setup_db, Drink
-from .auth.auth import AuthError, requires_auth, raise_error, ERR, CODE
+from .auth.auth import AuthError, requires_auth, raise_error, ERR, CODE, abort_error
 
 app = Flask(__name__)
 setup_db(app)
@@ -36,18 +36,16 @@ def get_drinks():
 
         return jsonify(response), CODE["200_OK"]
 
-    except Exception as e:
+    except:
         print(sys.exc_info())
-        raise_error(ERR[CODE["500_INTERNAL_SERVER_ERROR"]], e)
+        abort_error(CODE["500_INTERNAL_SERVER_ERROR"])
 
 
 # Get full drink details
-@app.route('/drinks-details', methods=["GET"])
+@app.route('/drinks-detail', methods=["GET"])
+# @requires_auth('get:drinks-detail')
 def get_drinks_detail():
     try:
-        if 'get:drinks-detail' not in request.permissions:
-            raise_error(ERR[CODE["401_UNAUTHORIZED"]], "Permission to get drinks details is not authorised")
-
         drinks = Drink.query.all()
         long_drinks = [drink.long() for drink in drinks]
 
@@ -58,19 +56,43 @@ def get_drinks_detail():
 
         return jsonify(response), CODE["200_OK"]
 
-    except Exception as e:
+    except:
         print(sys.exc_info())
-        raise_error(ERR[CODE["500_INTERNAL_SERVER_ERROR"]], e)
+        abort_error(CODE["500_INTERNAL_SERVER_ERROR"])
 
 
-'''
-@TODO implement endpoint
-    GET /drinks-detail
-        it should require the 'get:drinks-detail' permission
-        it should contain the drink.long() data representation
-    returns status code 200 and json {"success": True, "drinks": drinks} where drinks is the list of drinks
-        or appropriate status code indicating reason for failure
-'''
+# POST a new drink
+@app.route("/drinks", methods=["POST"])
+def post_drink():
+    try:
+        body = request.get_json()
+
+        if "title" not in body or "recipe" not in body:
+            abort_error(CODE["422_UNPROCESSABLE_ENTITY"])
+
+        drink_title = body.get("title", None)
+        drink_recipe = body.get("recipe", None)
+
+        # Instantiate new drink
+        new_drink = Drink(
+            title=drink_title,
+            recipe=json.dumps(drink_recipe)
+        )
+
+        # Add new drink to db
+        new_drink.insert()
+
+        response = {
+            "success": True,
+            "message": "Drink successfully created.",
+        }
+
+        return jsonify(response), CODE["200_OK"]
+
+    except:
+        print(sys.exc_info())
+        abort_error(CODE["500_INTERNAL_SERVER_ERROR"])
+
 
 '''
 @TODO implement endpoint
@@ -105,38 +127,67 @@ def get_drinks_detail():
         or appropriate status code indicating reason for failure
 '''
 
-## Error Handling
-'''
-Example error handling for unprocessable entity
-'''
 
+# Error Handling
+@app.errorhandler(CODE["400_BAD_REQUEST"])
+def bad_request(error):
+    print(error)
 
-@app.errorhandler(422)
-def unprocessable(error):
     return jsonify({
         "success": False,
-        "error": 422,
-        "message": "unprocessable"
-    }), 422
+        "error": CODE["400_BAD_REQUEST"],
+        "message": "Bad request",
+    }), CODE["400_BAD_REQUEST"]
 
 
-'''
-@TODO implement error handlers using the @app.errorhandler(error) decorator
-    each error handler should return (with approprate messages):
-             jsonify({
-                    "success": False, 
-                    "error": 404,
-                    "message": "resource not found"
-                    }), 404
+@app.errorhandler(CODE["404_RESOURCE_NOT_FOUND"])
+def resource_not_found(error):
+    print(error)
 
-'''
+    return jsonify({
+        "success": False,
+        "error": CODE["404_RESOURCE_NOT_FOUND"],
+        "message": "Resource not found",
+    }), CODE["404_RESOURCE_NOT_FOUND"]
 
-'''
-@TODO implement error handler for 404
-    error handler should conform to general task above 
-'''
 
-'''
-@TODO implement error handler for AuthError
-    error handler should conform to general task above 
-'''
+@app.errorhandler(CODE["405_METHOD_NOT_ALLOWED"])
+def resource_not_found(error):
+    print(error)
+
+    return jsonify({
+        "success": False,
+        "error": CODE["405_METHOD_NOT_ALLOWED"],
+        "message": "Method not allowed",
+    }), CODE["405_METHOD_NOT_ALLOWED"]
+
+
+@app.errorhandler(CODE["422_UNPROCESSABLE_ENTITY"])
+def unprocessable_entity(error):
+    print(error)
+
+    return jsonify({
+        "success": False,
+        "error": CODE["422_UNPROCESSABLE_ENTITY"],
+        "message": "Unprocessable entity",
+    }), CODE["422_UNPROCESSABLE_ENTITY"]
+
+
+@app.errorhandler(CODE["500_INTERNAL_SERVER_ERROR"])
+def internal_server_error(error):
+    print(error)
+
+    return jsonify({
+        "success": False,
+        "error": CODE["500_INTERNAL_SERVER_ERROR"],
+        "message": "Internal server error",
+    }), CODE["500_INTERNAL_SERVER_ERROR"]
+
+
+@app.errorhandler(AuthError)
+def auth_error(exception):
+    print(exception)
+
+    response = jsonify(exception.error)
+    response.status_code = exception.status_code
+    return response

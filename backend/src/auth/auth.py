@@ -1,5 +1,5 @@
 import json
-from flask import request, _request_ctx_stack
+from flask import request, _request_ctx_stack, abort
 from functools import wraps
 from jose import jwt
 from urllib.request import urlopen
@@ -13,8 +13,12 @@ CODE = {
     "200_OK": 200,
 
     # Client error codes
+    "400_BAD_REQUEST": 400,
     "401_UNAUTHORIZED": 401,
     "403_FORBIDDEN": 403,
+    "404_RESOURCE_NOT_FOUND": 404,
+    "405_METHOD_NOT_ALLOWED": 405,
+    "422_UNPROCESSABLE_ENTITY": 422,
 
     # Server error codes
     "500_INTERNAL_SERVER_ERROR": 500
@@ -25,6 +29,11 @@ ERR = {
         "Type": "AuthError",
         "Title": "invalid_header",
         "Code": CODE["401_UNAUTHORIZED"],
+    },
+    CODE["403_FORBIDDEN"]: {
+        "Type": "AuthError",
+        "Title": "forbidden",
+        "Code": CODE["403_FORBIDDEN"],
     }
 }
 
@@ -43,6 +52,11 @@ def raise_error(err, err_desc: str):
             "code": err["Title"],
             "description": err_desc
         }, err["Code"])
+
+
+# Handles the aborting of errors
+def abort_error(err_code):
+    abort(err_code)
 
 
 # Retrieve token from auth header
@@ -121,9 +135,15 @@ def requires_auth(permission=''):
     def requires_auth_decorator(f):
         @wraps(f)
         def wrapper(*args, **kwargs):
-            token = get_token_auth_header()
-            payload = verify_decode_jwt(token)
+            # Retrieve jwt from header
+            jwt = get_token_auth_header()
+
+            # Grab the payload from decoded jwt
+            payload = verify_decode_jwt(jwt)
+
+            # Check if user has permittance
             check_permissions(permission, payload)
+
             return f(payload, *args, **kwargs)
 
         return wrapper
